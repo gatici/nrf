@@ -15,7 +15,6 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/omec-project/config5g/proto/client"
 	"github.com/omec-project/nrf/logger"
 	"github.com/sirupsen/logrus"
 )
@@ -47,9 +46,10 @@ func InitConfigFactory(f string) error {
 		roc := os.Getenv("MANAGED_BY_CONFIG_POD")
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
-			commChannel := client.ConfigWatcher(NrfConfig.Configuration.WebuiUri)
+			client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+			configChannel := client.PublishOnConfigChange(true, NrfConfig.Configuration.WebuiUri)
 			ManagedByConfigPod = true
-			go NrfConfig.updateConfig(commChannel)
+			go NrfConfig.updateConfig(configChannel)
 		}
 	}
 
