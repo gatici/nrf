@@ -150,7 +150,13 @@ func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.Netwo
 	for {
 		if stream == nil {
 			if maxRetryCount == 0 {
-				confClient.GetConfigClientConn().Close()
+				confClient.Conn.Close()
+				close(confClient.Channel)
+				confClient := CreateChannel(newHost, 10000)
+				if confClient == nil {
+					logger.GrpcLog.Errorln("create grpc channel to config pod failed")
+					break
+				}
 			}
 			status := confClient.Conn.GetState()
 			var err error
