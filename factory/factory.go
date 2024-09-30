@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/grpc/connectivity"
 	"gopkg.in/yaml.v2"
 
 	"github.com/omec-project/nrf/logger"
@@ -48,10 +47,14 @@ func InitConfigFactory(f string) error {
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
 			client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-			configChannel := client.PublishOnConfigChange(true, NrfConfig.Configuration.WebuiUri)
-			if client.GetConfigClientConn().GetState() != connectivity.Ready {
-				configChannel = client.PublishOnConfigChange(true, NrfConfig.Configuration.WebuiUri)
-
+			fmt.Errorf("%v", client)
+			configChannel := client.PublishOnConfigChange(true)
+			fmt.Errorf("%v", configChannel)
+			for configChannel == nil {
+				client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+				fmt.Errorf("%v", client)
+				configChannel = client.PublishOnConfigChange(true)
+				fmt.Errorf("%v", configChannel)
 			}
 			go NrfConfig.updateConfig(configChannel)
 			ManagedByConfigPod = true

@@ -6,6 +6,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"time"
@@ -20,8 +21,9 @@ import (
 )
 
 var (
-	selfRestartCounter      uint32
-	configPodRestartCounter uint32 = 0
+	selfRestartCounter            uint32
+	configPodRestartCounter       uint32 = 0
+	maxRetryToConnectConfigServer uint32 = 0
 )
 
 func init() {
@@ -53,13 +55,13 @@ type ConfClient interface {
 	// channel is created on which subscription is done.
 	// On Receiving Configuration from ConfigServer, this api publishes
 	// on created channel and returns the channel
-	PublishOnConfigChange(mdataFlag bool, newHost string) chan *protos.NetworkSliceResponse
+	PublishOnConfigChange(mdataFlag bool) chan *protos.NetworkSliceResponse
 
 	// returns grpc connection object
 	GetConfigClientConn() *grpc.ClientConn
 
 	// Client Subscribing channel to ConfigPod to receive configuration
-	subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse, newHost string)
+	subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse)
 }
 
 // This API is added to control metadata from NF Clients
@@ -72,11 +74,11 @@ func ConnectToConfigServer(host string) ConfClient {
 	return confClient
 }
 
-func (confClient *ConfigClient) PublishOnConfigChange(mdataFlag bool, newHost string) chan *protos.NetworkSliceResponse {
+func (confClient *ConfigClient) PublishOnConfigChange(mdataFlag bool) chan *protos.NetworkSliceResponse {
 	confClient.MetadataRequested = mdataFlag
 	commChan := make(chan *protos.NetworkSliceResponse)
 	confClient.Channel = commChan
-	go confClient.subscribeToConfigPod(commChan, newHost)
+	go confClient.subscribeToConfigPod(commChan)
 	return commChan
 }
 
@@ -142,16 +144,19 @@ func (confClient *ConfigClient) GetConfigClientConn() *grpc.ClientConn {
 	return confClient.Conn
 }
 
-func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse, newHost string) {
+func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse) {
 	logger.GrpcLog.Infoln("subscribeToConfigPod ")
 	myid := os.Getenv("HOSTNAME")
 	var stream protos.ConfigService_NetworkSliceSubscribeClient
-	maxRetryCount := 5
 	for {
+		if maxRetryToConnectConfigServer > 5 {
+			fmt.Println("max retry > 5")
+			confClient.Conn.Close()
+			close(confClient.Channel)
+			maxRetryToConnectConfigServer = 0
+			break
+		}
 		if stream == nil {
-			if maxRetryCount == 0 {
-				confClient.GetConfigClientConn().Close()
-			}
 			status := confClient.Conn.GetState()
 			var err error
 			if status == connectivity.Ready {
@@ -161,18 +166,17 @@ func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.Netwo
 					logger.GrpcLog.Errorf("Failed to subscribe: %v", err)
 					time.Sleep(time.Second * 5)
 					// Retry on failure
-					maxRetryCount--
 					continue
 				}
 			} else if status == connectivity.Idle {
 				logger.GrpcLog.Errorf("Connectivity status idle, trying to connect again")
 				time.Sleep(time.Second * 5)
-				maxRetryCount--
+				maxRetryToConnectConfigServer++
 				continue
 			} else {
 				logger.GrpcLog.Errorf("Connectivity status not ready")
 				time.Sleep(time.Second * 5)
-				maxRetryCount--
+				maxRetryToConnectConfigServer++
 				continue
 			}
 		}
