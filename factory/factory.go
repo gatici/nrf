@@ -12,6 +12,7 @@ package factory
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -46,22 +47,28 @@ func InitConfigFactory(f string) error {
 		roc := os.Getenv("MANAGED_BY_CONFIG_POD")
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
-			client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-			if client != nil {
-				initLog.Infoln("GRPC client created")
-				stream := client.ConnectToGrpcServer()
-				for {
-					if stream == nil {
-						stream = client.ConnectToGrpcServer()
-						continue
+			var client ConfClient
+			for {
+				if client == nil {
+					client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+					if client != nil {
+						initLog.Infoln("GRPC client created")
+						stream := client.ConnectToGrpcServer()
+					StreamLoop:
+						for {
+							if stream == nil {
+								stream = client.ConnectToGrpcServer()
+								time.Sleep(time.Second * 10)
+								continue
+							}
+							configChannel := client.PublishOnConfigChange(true, stream)
+							ManagedByConfigPod = true
+							go NrfConfig.updateConfig(configChannel)
+							break StreamLoop
+						}
 					}
-					configChannel := client.PublishOnConfigChange(true, stream)
-					ManagedByConfigPod = true
-					go NrfConfig.updateConfig(configChannel)
-					break
 				}
 			}
-
 		}
 	}
 	return nil
