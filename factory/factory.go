@@ -48,7 +48,6 @@ func InitConfigFactory(f string) error {
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
 			var client ConfClient
-		ClientLoop:
 			for {
 				if client == nil {
 					client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
@@ -69,7 +68,6 @@ func InitConfigFactory(f string) error {
 					}
 
 				}
-				break ClientLoop
 			}
 		}
 	}
