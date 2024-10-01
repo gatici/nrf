@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	protos "github.com/omec-project/config5g/proto/sdcoreConfig"
 	"gopkg.in/yaml.v2"
 
 	"github.com/omec-project/nrf/logger"
@@ -53,10 +54,10 @@ func InitConfigFactory(f string) error {
 				if client != nil {
 					initLog.Infoln("GRPC client already existed.")
 					UpdateConfig(client)
+					break
 				} else {
 					client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-					initLog.Infoln("GRPC client is created.")
-					UpdateConfig(client)
+					continue
 				}
 			}
 		}
@@ -65,17 +66,18 @@ func InitConfigFactory(f string) error {
 }
 
 func UpdateConfig(client ConfClient) {
+	var stream protos.ConfigService_NetworkSliceSubscribeClient
 	for {
-		stream := client.ConnectToGrpcServer()
+		stream = client.ConnectToGrpcServer()
 		if stream == nil {
 			time.Sleep(time.Second * 10)
 			continue
 		}
-		configChannel := client.PublishOnConfigChange(true, stream)
-		ManagedByConfigPod = true
-		go NrfConfig.updateConfig(configChannel)
 		break
 	}
+	configChannel := client.PublishOnConfigChange(true, stream)
+	ManagedByConfigPod = true
+	go NrfConfig.updateConfig(configChannel)
 
 }
 
