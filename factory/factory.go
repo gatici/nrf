@@ -48,30 +48,35 @@ func InitConfigFactory(f string) error {
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
 			var client ConfClient
+			client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
 			for {
-				if client == nil {
-					client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-					if client != nil {
-						initLog.Infoln("GRPC client created")
-					StreamLoop:
-						for {
-							stream := client.ConnectToGrpcServer()
-							if stream == nil {
-								time.Sleep(time.Second * 10)
-								continue
-							}
-							configChannel := client.PublishOnConfigChange(true, stream)
-							ManagedByConfigPod = true
-							go NrfConfig.updateConfig(configChannel)
-							break StreamLoop
-						}
-					}
-
+				if client != nil {
+					initLog.Infoln("GRPC client already existed.")
+					UpdateConfig(client)
+				} else {
+					client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+					initLog.Infoln("GRPC client is created.")
+					UpdateConfig(client)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func UpdateConfig(client ConfClient) {
+	for {
+		stream := client.ConnectToGrpcServer()
+		if stream == nil {
+			time.Sleep(time.Second * 10)
+			continue
+		}
+		configChannel := client.PublishOnConfigChange(true, stream)
+		ManagedByConfigPod = true
+		go NrfConfig.updateConfig(configChannel)
+		break
+	}
+
 }
 
 func CheckConfigVersion() error {
