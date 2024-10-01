@@ -15,6 +15,7 @@ import (
 	"time"
 
 	protos "github.com/omec-project/config5g/proto/sdcoreConfig"
+	"google.golang.org/grpc/connectivity"
 	"gopkg.in/yaml.v2"
 
 	"github.com/omec-project/nrf/logger"
@@ -54,7 +55,11 @@ func InitConfigFactory(f string) error {
 				if client != nil {
 					initLog.Infoln("GRPC client already existed.")
 					UpdateConfig(client)
-					break
+					if (client.GetConfigClientConn().GetState() == connectivity.Idle) || (client.GetConfigClientConn().GetState() == connectivity.TransientFailure) || (client.GetConfigClientConn().GetState() == connectivity.Shutdown) {
+						client = nil
+						continue
+					}
+
 				} else {
 					client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
 					continue
