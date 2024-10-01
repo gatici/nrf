@@ -58,8 +58,8 @@ func InitConfigFactory(f string) error {
 					client = nil
 					continue
 				}
-				go NrfConfig.updateConfig(configChannel)
 				ManagedByConfigPod = true
+				go NrfConfig.updateConfig(configChannel)
 			}
 		}
 	}
