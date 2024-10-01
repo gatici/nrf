@@ -53,11 +53,10 @@ func InitConfigFactory(f string) error {
 					client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
 					if client != nil {
 						initLog.Infoln("GRPC client created")
-						stream := client.ConnectToGrpcServer()
 					StreamLoop:
 						for {
+							stream := client.ConnectToGrpcServer()
 							if stream == nil {
-								stream = client.ConnectToGrpcServer()
 								time.Sleep(time.Second * 10)
 								continue
 							}
