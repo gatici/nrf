@@ -157,16 +157,19 @@ func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.Netwo
 				if stream, err = confClient.Client.NetworkSliceSubscribe(context.Background(), rreq); err != nil {
 					logger.GrpcLog.Errorf("Failed to subscribe: %v", err)
 					time.Sleep(time.Second * 5)
+					maxRetryCounter++
 					continue
 				}
 			} else if status == connectivity.Idle {
 				logger.GrpcLog.Errorf("Connectivity status idle, trying to connect again")
 				time.Sleep(time.Second * 5)
+				maxRetryCounter++
 				continue
 
 			} else {
 				logger.GrpcLog.Errorf("Connectivity status not ready")
 				time.Sleep(time.Second * 5)
+				maxRetryCounter++
 				continue
 			}
 		}
