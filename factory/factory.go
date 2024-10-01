@@ -46,18 +46,21 @@ func InitConfigFactory(f string) error {
 		roc := os.Getenv("MANAGED_BY_CONFIG_POD")
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
-			client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-			fmt.Errorf("%v", client)
-			configChannel := client.PublishOnConfigChange(true)
-			fmt.Errorf("%v", configChannel)
-			for configChannel == nil {
-				client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-				fmt.Errorf("%v", client)
-				configChannel = client.PublishOnConfigChange(true)
-				fmt.Errorf("%v", configChannel)
+			var client ConfClient
+			for client == nil {
+				client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+				initLog.Infoln("GRPC client created")
+				configChannel := client.PublishOnConfigChange(true)
+				initLog.Infoln("ConfigChannel created")
+				if client.GetConfigClientConn() == nil {
+					initLog.Infoln("ConfigChannel closed")
+					close(configChannel)
+					client = nil
+					continue
+				}
+				go NrfConfig.updateConfig(configChannel)
+				ManagedByConfigPod = true
 			}
-			go NrfConfig.updateConfig(configChannel)
-			ManagedByConfigPod = true
 		}
 	}
 
