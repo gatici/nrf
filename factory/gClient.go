@@ -201,5 +201,4 @@ func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.Netwo
 			logger.GrpcLog.Errorf("Config Pod is restarted and no config received")
 		}
 	}
-	confClient = nil
 }

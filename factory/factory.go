@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 
+	"google.golang.org/grpc/connectivity"
 	"gopkg.in/yaml.v2"
 
 	"github.com/omec-project/nrf/logger"
@@ -52,7 +53,7 @@ func InitConfigFactory(f string) error {
 				initLog.Infoln("GRPC client created")
 				configChannel := client.PublishOnConfigChange(true)
 				initLog.Infoln("ConfigChannel created")
-				if client.GetConfigClientConn() == nil {
+				if client.GetConfigClientConn().GetState() != connectivity.Ready {
 					initLog.Infoln("ConfigChannel closed")
 					close(configChannel)
 					client = nil
