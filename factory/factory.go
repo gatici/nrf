@@ -55,6 +55,7 @@ func InitConfigFactory(f string) error {
 				if client != nil {
 					initLog.Infoln("GRPC client existed.")
 					if (client.GetConfigClientConn().GetState() == connectivity.Idle) || (client.GetConfigClientConn().GetState() == connectivity.TransientFailure) || (client.GetConfigClientConn().GetState() == connectivity.Shutdown) {
+						client.GetConfigClientConn().Close()
 						client = nil
 						continue
 					}
