@@ -12,9 +12,7 @@ package factory
 import (
 	"fmt"
 	"os"
-	"time"
 
-	"google.golang.org/grpc/connectivity"
 	"gopkg.in/yaml.v2"
 
 	"github.com/omec-project/nrf/logger"
@@ -48,25 +46,24 @@ func InitConfigFactory(f string) error {
 		roc := os.Getenv("MANAGED_BY_CONFIG_POD")
 		if roc == "true" {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
-			var client ConfClient
-			for client == nil {
-				client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+			client := ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+			if client != nil {
 				initLog.Infoln("GRPC client created")
-				configChannel := client.PublishOnConfigChange(true)
-				time.Sleep(time.Second * 30)
-				initLog.Infoln("ConfigChannel created")
-				if client.GetConfigClientConn().GetState() != connectivity.Ready {
-					initLog.Infoln("ConfigChannel closed")
-					close(configChannel)
-					client = nil
-					continue
+				stream := client.ConnectToGrpcServer()
+				for {
+					if stream == nil {
+						stream = client.ConnectToGrpcServer()
+						continue
+					}
+					configChannel := client.PublishOnConfigChange(true, stream)
+					ManagedByConfigPod = true
+					go NrfConfig.updateConfig(configChannel)
+					break
 				}
-				ManagedByConfigPod = true
-				go NrfConfig.updateConfig(configChannel)
 			}
+
 		}
 	}
-
 	return nil
 }
 
