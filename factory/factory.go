@@ -53,12 +53,13 @@ func InitConfigFactory(f string) error {
 			client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
 			for {
 				if client != nil {
-					initLog.Infoln("GRPC client already existed.")
-					UpdateConfig(client)
+					initLog.Infoln("GRPC client existed.")
 					if (client.GetConfigClientConn().GetState() == connectivity.Idle) || (client.GetConfigClientConn().GetState() == connectivity.TransientFailure) || (client.GetConfigClientConn().GetState() == connectivity.Shutdown) {
 						client = nil
 						continue
 					}
+					UpdateConfig(client)
+					break
 
 				} else {
 					client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
