@@ -12,6 +12,7 @@ package factory
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"google.golang.org/grpc/connectivity"
 	"gopkg.in/yaml.v2"
@@ -52,6 +53,7 @@ func InitConfigFactory(f string) error {
 				client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
 				initLog.Infoln("GRPC client created")
 				configChannel := client.PublishOnConfigChange(true)
+				time.Sleep(time.Second * 30)
 				initLog.Infoln("ConfigChannel created")
 				if client.GetConfigClientConn().GetState() != connectivity.Ready {
 					initLog.Infoln("ConfigChannel closed")
