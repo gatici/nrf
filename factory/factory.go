@@ -51,19 +51,20 @@ func InitConfigFactory(f string) error {
 			initLog.Infoln("MANAGED_BY_CONFIG_POD is true")
 			var client ConfClient
 			client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+			UpdateConfig(client)
 			for {
 				if client != nil {
 					initLog.Infoln("GRPC client existed.")
-					UpdateConfig(client)
-					time.Sleep(time.Second * 15)
+					time.Sleep(time.Second * 20)
 					if client.GetConfigClientConn().GetState() != connectivity.Ready {
 						client.GetConfigClientConn().Close()
 						client = nil
 						continue
-					} else {
-						client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
-						continue
 					}
+				} else {
+					client = ConnectToConfigServer(NrfConfig.Configuration.WebuiUri)
+					UpdateConfig(client)
+					continue
 				}
 			}
 		}
@@ -74,12 +75,15 @@ func InitConfigFactory(f string) error {
 func UpdateConfig(client ConfClient) {
 	var stream protos.ConfigService_NetworkSliceSubscribeClient
 	for {
-		stream = client.ConnectToGrpcServer()
-		if stream == nil {
-			time.Sleep(time.Second * 10)
-			continue
+		if client != nil {
+			stream = client.ConnectToGrpcServer()
+			if stream == nil {
+				time.Sleep(time.Second * 10)
+				continue
+			}
+			break
 		}
-		break
+
 	}
 	configChannel := client.PublishOnConfigChange(true, stream)
 	ManagedByConfigPod = true
