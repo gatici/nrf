@@ -32,6 +32,11 @@ func init() {
 	initLog = logger.InitLog
 }
 
+// InitConfigFactory gets the NrfConfig and subscribes the config pod.
+// This observes the GRPC client availability and connection status in a loop.
+// When the GRPC server pod is restarted, GRPC connection status stuck in idle.
+// If GRPC client does not exist, creates it. If client exists but GRPC connectivity is not ready,
+// then it closes the existing client start a new client.
 // TODO: Support configuration update from REST api
 func InitConfigFactory(f string) error {
 	if content, err := os.ReadFile(f); err != nil {
@@ -54,7 +59,6 @@ func InitConfigFactory(f string) error {
 			UpdateConfig(client)
 			for {
 				if client != nil {
-					initLog.Infoln("GRPC client existed.")
 					time.Sleep(time.Second * 20)
 					if client.GetConfigClientConn().GetState() != connectivity.Ready {
 						client.GetConfigClientConn().Close()
@@ -72,6 +76,8 @@ func InitConfigFactory(f string) error {
 	return nil
 }
 
+// UpdateConfig connects the config pod GRPC server and subscribes the config changes
+// then updates NRF configuration
 func UpdateConfig(client ConfClient) {
 	var stream protos.ConfigService_NetworkSliceSubscribeClient
 	for {

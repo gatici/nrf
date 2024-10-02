@@ -50,22 +50,22 @@ type ConfigClient struct {
 }
 
 type ConfClient interface {
-	// channel is created on which subscription is done.
+	// A channel is created on which subscription is done.
 	// On Receiving Configuration from ConfigServer, this api publishes
 	// on created channel and returns the channel
 	PublishOnConfigChange(metadataRequested bool, stream protos.ConfigService_NetworkSliceSubscribeClient) chan *protos.NetworkSliceResponse
 
-	// returns grpc connection object
+	// GetConfigClientConn returns grpc connection object
 	GetConfigClientConn() *grpc.ClientConn
 
 	// Client Subscribing channel to ConfigPod to receive configuration
 	subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse, stream protos.ConfigService_NetworkSliceSubscribeClient)
 
-	// Connect to a GRPC server with a Client ID and returns a stream
+	// ConnectToGrpcServer connects to a GRPC server with a Client ID and returns a stream
 	ConnectToGrpcServer() (stream protos.ConfigService_NetworkSliceSubscribeClient)
 }
 
-// This API is added to control metadata from NF Clients
+// ConnectToConfigServer this API is added to control metadata from NF clients
 func ConnectToConfigServer(host string) ConfClient {
 	confClient := CreateChannel(host, 10000)
 	if confClient == nil {
@@ -75,10 +75,23 @@ func ConnectToConfigServer(host string) ConfClient {
 	return confClient
 }
 
-func (confClient *ConfigClient) PublishOnConfigChange(mdataFlag bool, stream protos.ConfigService_NetworkSliceSubscribeClient) chan *protos.NetworkSliceResponse {
-	confClient.MetadataRequested = mdataFlag
+func (confClient *ConfigClient) PublishOnConfigChange(metadataFlag bool, stream protos.ConfigService_NetworkSliceSubscribeClient) chan *protos.NetworkSliceResponse {
+	confClient.MetadataRequested = metadataFlag
 	commChan := make(chan *protos.NetworkSliceResponse)
 	confClient.Channel = commChan
+	go confClient.subscribeToConfigPod(commChan, stream)
+	return commChan
+}
+
+// ConfigWatcher pass structr which has configChangeUpdate interface
+func ConfigWatcher(webuiUri string, stream protos.ConfigService_NetworkSliceSubscribeClient) chan *protos.NetworkSliceResponse {
+	// TODO: use port from configmap.
+	confClient := CreateChannel(webuiUri, 10000)
+	if confClient == nil {
+		logger.GrpcLog.Errorf("create grpc channel to config pod failed")
+		return nil
+	}
+	commChan := make(chan *protos.NetworkSliceResponse)
 	go confClient.subscribeToConfigPod(commChan, stream)
 	return commChan
 }
@@ -121,7 +134,7 @@ var retryPolicy = `{
 
 func newClientConnection(host string) (conn *grpc.ClientConn, err error) {
 	/* get connection */
-	logger.GrpcLog.Infoln("Dial grpc connection - ", host)
+	logger.GrpcLog.Infoln("dial grpc connection:", host)
 
 	bd := 1 * time.Second
 	mltpr := 1.0
@@ -133,7 +146,7 @@ func newClientConnection(host string) (conn *grpc.ClientConn, err error) {
 	dialOptions := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithKeepaliveParams(kacp), grpc.WithDefaultServiceConfig(retryPolicy), grpc.WithConnectParams(crt)}
 	conn, err = grpc.NewClient(host, dialOptions...)
 	if err != nil {
-		logger.GrpcLog.Errorln("grpc newclient err: ", err)
+		logger.GrpcLog.Errorln("grpc newclient err:", err)
 		return nil, err
 	}
 	conn.Connect()
@@ -145,59 +158,60 @@ func (confClient *ConfigClient) GetConfigClientConn() *grpc.ClientConn {
 	return confClient.Conn
 }
 
+// ConnectToGrpcServer connects to a GRPC server with a Client ID
+// and returns a stream if connection is successful else returns nil
 func (confClient *ConfigClient) ConnectToGrpcServer() (stream protos.ConfigService_NetworkSliceSubscribeClient) {
-	logger.GrpcLog.Infoln("connectToGrpcServer ")
+	logger.GrpcLog.Infoln("connectToGrpcServer")
 	myid := os.Getenv("HOSTNAME")
 	stream = nil
 	status := confClient.Conn.GetState()
 	var err error
 	if status == connectivity.Ready {
-		logger.GrpcLog.Infoln("connectivity ready ")
+		logger.GrpcLog.Infoln("connectivity ready")
 		rreq := &protos.NetworkSliceRequest{RestartCounter: selfRestartCounter, ClientId: myid, MetadataRequested: confClient.MetadataRequested}
 		if stream, err = confClient.Client.NetworkSliceSubscribe(context.Background(), rreq); err != nil {
-			logger.GrpcLog.Errorf("Failed to subscribe: %v", err)
+			logger.GrpcLog.Errorf("failed to subscribe: %v", err)
 			return stream
 		}
 		return stream
 	} else if status == connectivity.Idle {
-		logger.GrpcLog.Errorf("Connectivity status idle, trying to connect again")
+		logger.GrpcLog.Errorf("connectivity status idle, trying to connect again")
 		return stream
 	} else {
-		logger.GrpcLog.Errorf("Connectivity status not ready")
-		time.Sleep(time.Second * 5)
+		logger.GrpcLog.Errorf("connectivity status not ready")
 		return stream
 	}
 }
 
+// subscribeToConfigPod subscribing channel to ConfigPod to receive configuration
+// using stream and communication channel as inputs
 func (confClient *ConfigClient) subscribeToConfigPod(commChan chan *protos.NetworkSliceResponse, stream protos.ConfigService_NetworkSliceSubscribeClient) {
 	rsp, err := stream.Recv()
 	if err != nil {
-		logger.GrpcLog.Errorf("Failed to receive message: %v", err)
-		stream = nil
-		time.Sleep(time.Second * 5)
+		logger.GrpcLog.Errorf("failed to receive message: %v", err)
 		return
 	}
 
-	logger.GrpcLog.Infoln("stream msg received ")
-	logger.GrpcLog.Debugf("#Network Slices %v, RC of configpod %v ", len(rsp.NetworkSlice), rsp.RestartCounter)
+	logger.GrpcLog.Infoln("stream msg received")
+	logger.GrpcLog.Debugf("network slices %d, RC of config pod %d", len(rsp.NetworkSlice), rsp.RestartCounter)
 	if configPodRestartCounter == 0 || (configPodRestartCounter == rsp.RestartCounter) {
 		// first time connection or config update
 		configPodRestartCounter = rsp.RestartCounter
 		if len(rsp.NetworkSlice) > 0 {
 			// always carries full config copy
-			logger.GrpcLog.Infoln("First time config Received ", rsp)
+			logger.GrpcLog.Infoln("first time config received", rsp)
 			commChan <- rsp
 		} else if rsp.ConfigUpdated == 1 {
 			// config delete , all slices deleted
-			logger.GrpcLog.Infoln("Complete config deleted ")
+			logger.GrpcLog.Infoln("complete config deleted")
 			commChan <- rsp
 		}
 	} else if len(rsp.NetworkSlice) > 0 {
-		logger.GrpcLog.Errorf("Config received after config Pod restart")
+		logger.GrpcLog.Errorf("config received after config pod restart")
 		// config received after config pod restart
 		configPodRestartCounter = rsp.RestartCounter
 		commChan <- rsp
 	} else {
-		logger.GrpcLog.Errorf("Config Pod is restarted and no config received")
+		logger.GrpcLog.Errorf("config pod is restarted and no config received")
 	}
 }
