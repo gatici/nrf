@@ -38,8 +38,9 @@ func InitConfigFactory(f string) error {
 		logger.CfgLog.Infof("webuiUri not set in configuration file. Using %v", NrfConfig.Configuration.WebuiUri)
 		return nil
 	}
-	err = validateWebuiUri(NrfConfig.Configuration.WebuiUri)
-	return err
+	//err = validateWebuiUri(NrfConfig.Configuration.WebuiUri)
+	//return err
+	return nil
 }
 
 func CheckConfigVersion() error {
